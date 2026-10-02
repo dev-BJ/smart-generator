@@ -17,6 +17,9 @@ import {
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr"
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 type Reading = {
   id?: number;
@@ -55,6 +58,19 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState("");
+  const [shouldFetch, setShouldFetch] = useState(false);
+
+  const {
+    data: readingsData,
+    // error: readingsError,
+    // mutate: refreshReadings,
+  } = useSWR<DashboardData>(shouldFetch ? "/api/dashboard" : null, fetcher, { refreshInterval: 30000 })
+
+  useEffect(() => {
+    if (readingsData) {
+      setData(readingsData);
+    }
+  }, [readingsData]);
 
   async function load() {
     setError("");
@@ -74,7 +90,7 @@ export default function Page() {
           return;
         }
         setUser((await response.json()).user);
-        return load();
+        setShouldFetch(true);
       })
       .catch(() => setError("Unable to connect to the telemetry database."))
       .finally(() => setLoading(false));
