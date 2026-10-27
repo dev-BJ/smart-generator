@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Database,
   Fuel,
@@ -17,9 +19,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import useSWR from "swr"
+import useSWR from "swr";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const PAGE_SIZE = 10;
 
 type Reading = {
   id?: number;
@@ -36,6 +39,7 @@ type DashboardData = {
   latest: Reading[];
   daily_fuel: Reading[];
   recent: Reading[];
+  recent_total: number;
 };
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
@@ -59,12 +63,16 @@ export default function Page() {
   const [navOpen, setNavOpen] = useState(false);
   const [error, setError] = useState("");
   const [shouldFetch, setShouldFetch] = useState(false);
+  const [page, setPage] = useState(1);
+  const dashboardUrl = `/api/dashboard?limit=${PAGE_SIZE}&offset=${(page - 1) * PAGE_SIZE}`;
 
   const {
     data: readingsData,
     // error: readingsError,
     // mutate: refreshReadings,
-  } = useSWR<DashboardData>(shouldFetch ? "/api/dashboard" : null, fetcher, { refreshInterval: 30000 })
+  } = useSWR<DashboardData>(shouldFetch ? dashboardUrl : null, fetcher, {
+    refreshInterval: 30000,
+  });
 
   useEffect(() => {
     if (readingsData) {
@@ -74,7 +82,7 @@ export default function Page() {
 
   async function load() {
     setError("");
-    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const response = await fetch(dashboardUrl, { cache: "no-store" });
     if (response.status === 401) {
       router.replace("/login");
       return;
@@ -98,7 +106,18 @@ export default function Page() {
 
   const latest = data?.latest ?? [];
   const recent = data?.recent ?? [];
+  const recentTotal = Number(data?.recent_total ?? 0);
+  const pageCount = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const firstRow = recentTotal === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(currentPage * PAGE_SIZE, recentTotal);
+  const displayedRecent = recent;
   const selected = latest[0];
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, pageCount));
+  }, [pageCount]);
+
   const totalFuel = useMemo(
     () =>
       (data?.daily_fuel ?? []).reduce(
@@ -370,7 +389,7 @@ export default function Page() {
                       </tr>
                     </thead>
                     <tbody>
-                      {recent.map((row) => (
+                      {displayedRecent.map((row) => (
                         <tr key={row.id}>
                           <td>
                             {formatDate(row.recorded_at)}{" "}
@@ -387,6 +406,32 @@ export default function Page() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="table-pagination">
+                  <span className="pagination-summary">
+                    Showing {firstRow}–{lastRow} of {recentTotal}
+                  </span>
+                  <div className="pagination-controls">
+                    <span>
+                      Page {currentPage} of {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Previous page"
+                      onClick={() => setPage((currentPage) => currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next page"
+                      onClick={() => setPage((currentPage) => currentPage + 1)}
+                      disabled={currentPage === pageCount}
+                    >
+                      <ChevronRight />
+                    </button>
+                  </div>
                 </div>
               </section>
               <details className="schema-details">
